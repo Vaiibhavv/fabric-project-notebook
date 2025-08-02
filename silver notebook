@@ -1,0 +1,39 @@
+## silver lakehouse
+
+%%sql
+CREATE TABLE S_Lakehouse.FactInvoices(
+CustomerID_FK int, 
+StockItemID_FK int,
+InvoiceDate_FK TIMESTAMP,
+InvoiceID int,
+OrderID int,	
+InvoiceLineID int,
+Quantity int,	
+UnitPrice real,
+TaxRate real,
+TotalAmount real
+)
+
+invoices_df=spark.read.table("B_Lakehouse.Invoices")
+invoicelines_df=spark.read.table("B_Lakehouse.InvoiceLines")
+
+## selecting the required columns
+
+from pyspark.sql.functions import col
+invoices_filtered_df=invoices_df.select("InvoiceID",col("CustomerID").alias("CustomerID_FK"),"OrderID",col("InvoiceDate").alias("InvoiceDate_FK"))
+invoiceLines_filtered_df=invoicelines_df.select("InvoiceLineID","InvoiceID",col("StockItemID").alias("StockItemID_FK"),"Quantity",col("UnitPrice").cast('float'),col("TaxRate").cast('float'))
+#3display(invoices_filtered_df)
+
+invoices_filtered_df.printSchema()
+
+spark.table("S_Lakehouse.FactInvoices").printSchema()
+
+## performing the join 
+invoices_join_df=invoices_filtered_df.join(invoiceLines_filtered_df,on="InvoiceID",how="leftouter")
+display(invoices_join_df)
+
+invoices_fact_df=invoices_join_df.withColumn("TotalAmount",col("UnitPrice")*col("Quantity")*(1+col("TaxRate")))
+display(invoices_fact_df)
+
+## writing on a table 
+invoices_fact_df.write.mode("append").saveAsTable("S_Lakehouse.FactInvoices")
