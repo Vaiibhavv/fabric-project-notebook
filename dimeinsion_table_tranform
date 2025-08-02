@@ -1,0 +1,64 @@
+## dimension table and transformation
+
+%%sql
+CREATE TABLE S_Lakehouse.DimCustomer (
+    Customer_SK int,
+	CustomerID int,
+	CustomerName varchar(1000),
+	CustomerCategoryName varchar(1000)	
+)
+
+customers_filtered_df=customers_df.select("CustomerID","CustomerName","CustomerCategoryID")
+customer_categories_filtered_df=customer_categories_df.select("CustomerCategoryID","CustomerCategoryName")
+display(customers_filtered_df)
+
+customer_join_df=customers_filtered_df.join(customer_categories_filtered_df,on="CustomerCategoryID",how="leftouter")
+
+customer_join_filtered_df=customer_join_df.select("CustomerID","CustomerName","CustomerCategoryName")
+display(customer_join_filtered_df)
+
+
+from pyspark.sql.functions import *
+customer_dim_df=customer_join_filtered_df.withColumn("Customer_SK",monotonically_increasing_id())
+customer_dim_final_df=customer_dim_df.select("CustomerID","CustomerName","CustomerCategoryName",col("Customer_SK").cast('int'))
+display(customer_dim_final_df)
+
+
+customer_dim_final_df.write.mode("append").saveAsTable("S_lakehouse.dimcustomer")
+
+%%sql
+CREATE TABLE S_Lakehouse.DimStock (
+	Stock_SK int,
+	StockItemID int,
+	StockItemName varchar(1000),
+	StockGroupName varchar(1000)
+)
+
+stockitems_df=spark.read.table("B_Lakehouse.StockItems")
+stock_groups_df=spark.read.table("B_Lakehouse.StockGroups")
+stock_item_stock_groups_df=spark.read.table("B_Lakehouse.StockItemStockGroups")
+
+stockitems_filtered_df=stockitems_df.select("StockItemID","StockItemName")
+stock_groups_filtered_df=stock_groups_df.select("StockGroupID","StockGroupName")
+stock_item_stock_groups_filtered_df=stock_item_stock_groups_df.select("StockItemStockGroupID","StockItemID","StockGroupID")
+display(stockitems_filtered_df)
+
+stock_join_df=stockitems_filtered_df.join(stock_item_stock_groups_filtered_df,on="StockItemID",how="leftouter")
+stock_join_filtered_df=stock_join_df.select("StockItemID","StockItemName","StockGroupID")
+display(stock_join_filtered_df)
+
+stock_group_join_df=stock_join_filtered_df.join(stock_groups_df,on="StockGroupID",how="leftouter")
+stock_group_join_filtered_df=stock_group_join_df.select("StockItemID","StockItemName","StockGroupName")
+display(stock_group_join_filtered_df)
+
+
+stock_group_join_dropduplicates_df=stock_group_join_filtered_df.dropDuplicates(["StockItemID"])
+display(stock_group_join_dropduplicates)
+
+from pyspark.sql.functions import *
+stock_dim_df=stock_group_join_dropduplicates_df.withColumn("Stock_SK",monotonically_increasing_id())
+stock_dim_final_df=stock_dim_df.select("StockItemID","StockItemName","StockGroupName",col("Stock_SK").cast('int'))
+display(stock_dim_final_df)
+
+
+stock_dim_final_df.write.mode("append").saveAsTable("dimstock")
